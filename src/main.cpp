@@ -5,14 +5,15 @@
 #include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 
-const char *BASE_URL = "https://random-messages--igorunderplayer.replit.app/api";
+constexpr const char *BASE_URL = "https://random-messages--igorunderplayer.replit.app/api";
 
-const char *SSID = "Remofer do Brasil";
-const char *PASSWORD = "amelhor2019";
+constexpr const char *SSID = "Remofer do Brasil";
+constexpr const char *PASSWORD = "amelhor2019";
 
-const uint8_t LCD_I2C_ADDRESS = 0x27;
-const uint8_t LCD_COLUMNS = 16;
-const uint8_t LCD_ROWS = 2;
+constexpr const uint8_t LCD_I2C_ADDRESS = 0x27;
+constexpr const uint8_t LCD_COLUMNS = 16;
+constexpr const uint8_t LCD_ROWS = 2;
+
 LiquidCrystal_I2C lcd(LCD_I2C_ADDRESS, LCD_COLUMNS, LCD_ROWS);
 
 WiFiClientSecure secureClient;
@@ -51,6 +52,42 @@ String normalizeText(String s)
   s.replace("Ç", "C");
 
   return s;
+}
+
+void get_random_message()
+{
+  lcd.clear();
+
+  client.begin(secureClient, BASE_URL);
+  int httpCode = client.GET();
+  if (httpCode > 0)
+  {
+    String payload = client.getString();
+    Serial.println(payload);
+
+    JsonDocument doc;
+    if (DeserializationError error = deserializeJson(doc, payload); error)
+    {
+      Serial.print(F("deserializeJson() failed: "));
+      Serial.println(error.f_str());
+      return;
+    }
+
+    String message = doc["msg"];
+    message = normalizeText(message);
+    Serial.println("Message: " + message);
+
+    lcd.print(message.substring(0, min((size_t)LCD_COLUMNS, message.length())));
+    if (message.length() > LCD_COLUMNS)
+    {
+      lcd.setCursor(0, 1);
+      lcd.print(message.substring(LCD_COLUMNS, min((size_t)(LCD_COLUMNS * 2), message.length())));
+    }
+  }
+  else
+  {
+    Serial.println("Error on HTTP request");
+  }
 }
 
 void setup()
@@ -93,41 +130,14 @@ void setup()
   delay(200);
 }
 
+constexpr uint32_t fetchInterval = 3000; // 3 seconds
 void loop()
 {
-  lcd.clear();
+  static uint32_t lastFetch = 0;
 
-  client.begin(secureClient, BASE_URL);
-  int httpCode = client.GET();
-  if (httpCode > 0)
+  if (millis() - lastFetch >= fetchInterval)
   {
-    String payload = client.getString();
-    Serial.println(payload);
-
-    JsonDocument doc;
-    DeserializationError error = deserializeJson(doc, payload);
-    if (error)
-    {
-      Serial.print(F("deserializeJson() failed: "));
-      Serial.println(error.f_str());
-      return;
-    }
-
-    String message = doc["msg"];
-    message = normalizeText(message);
-    Serial.println("Message: " + message);
-
-    lcd.print(message.substring(0, min((size_t)LCD_COLUMNS, message.length())));
-    if (message.length() > LCD_COLUMNS)
-    {
-      lcd.setCursor(0, 1);
-      lcd.print(message.substring(LCD_COLUMNS, min((size_t)(LCD_COLUMNS * 2), message.length())));
-    }
+    get_random_message();
+    lastFetch = millis();
   }
-  else
-  {
-    Serial.println("Error on HTTP request");
-  }
-
-  delay(3000);
 }
