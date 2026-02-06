@@ -14,6 +14,8 @@ constexpr const uint8_t LCD_I2C_ADDRESS = 0x27;
 constexpr const uint8_t LCD_COLUMNS = 16;
 constexpr const uint8_t LCD_ROWS = 2;
 
+constexpr const uint8_t RESET_PIN = 23;
+
 LiquidCrystal_I2C lcd(LCD_I2C_ADDRESS, LCD_COLUMNS, LCD_ROWS);
 
 WiFiClientSecure secureClient;
@@ -88,13 +90,17 @@ void get_random_message()
   {
     Serial.println("Error on HTTP request");
   }
+
+  client.end();
 }
 
 void setup()
 {
-  Serial.begin(115200);
+  pinMode(RESET_PIN, INPUT_PULLUP);
 
+  Serial.begin(115200);
   delay(500);
+
   lcd.init();
   lcd.backlight();
 
@@ -133,7 +139,30 @@ void setup()
 constexpr uint32_t fetchInterval = 3000; // 3 seconds
 void loop()
 {
+  // "static" mark the variable to keep its value between function calls
   static uint32_t lastFetch = 0;
+  static uint32_t lastResetPress = 0;
+
+  // check for reset button press + debounce to avoid multiple reset calls
+  if (digitalRead(RESET_PIN) == LOW && millis() - lastResetPress > 1000)
+  {
+    lastResetPress = millis();
+
+    Serial.println("Reset via botão");
+    lcd.clear();
+    lcd.print("Resetting... in");
+    lcd.setCursor(0, 1);
+
+    for (int i = 3; i > 0; i--)
+    {
+      lcd.print("   ");
+      lcd.setCursor(0, 1);
+      lcd.print(i);
+      delay(1000);
+    }
+
+    ESP.restart();
+  }
 
   if (millis() - lastFetch >= fetchInterval)
   {
